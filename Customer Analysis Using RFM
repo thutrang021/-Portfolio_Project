@@ -55,7 +55,4 @@ select c.CustomerID,c.Recency,c.Frequency,c.Monetary,R,F,M,s.RFM,s.Segmentation 
 join RFM_Sc c on s.CustomerID = c.CustomerID
 group by c.CustomerID, c.created_date
 
--- Star Doanh thu cao, tần suất quay lại nhiều
--- Cash cow Tần suất quay lại nhiều, doanh thu đều đặn nhưng không nhiều bằng star. Khách hàng thân thiết nhưng chưa chi tiền quá nhiều
--- Question mark Khách hàng tiềm năng, mới xuất hện gần đay, chi tiêu cũng nhiều. Có th mất bất c lúc nào
--- Dog khách hàng vãng lai
+
