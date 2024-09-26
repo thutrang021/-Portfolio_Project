@@ -1,0 +1,61 @@
+-- Tao bang tam tinh toan cac gia tri Recency, Frequency, Monetary
+drop table if exists RFM_Sc;
+create temporary table RFM_Sc as (
+        with A as (
+        select
+                *
+               ,datediff('2022-09-01', max(ct.Purchase_Date)) as Recency
+               ,round(cast(count(distinct(cast(ct.Purchase_Date as date)))
+                               /(datediff('2022-09-01',cast(cr.created_date as date))/365) as float), 2) as Frequency
+               ,round(cast(sum(GMV)
+                               /(datediff('2022-09-01',cast(cr.created_date as date))/365) as float), 2) as Monetary
+        from customer_transaction ct
+        join customer_registered cr on ct.CustomerID = cr.ID
+        where cr.stopdate is null and ct.CustomerID <> 0
+        group by CustomerID)
+-- Sap xep thu tu cua cac gia tri Recency, Frequency, Monetary
+        select *
+            ,row_number() over (order by datediff('2022-09-01', max(Purchase_Date))) as rn_Recency
+            ,row_number() over (order by round(cast(count(distinct(cast(Purchase_Date as date)))
+                               /(datediff('2022-09-01',cast(created_date as date))/365) as float), 2)) as rn_Frequency
+            ,row_number() over (order by sum(GMV)) as rn_Monetary
+        from A
+        group by CustomerID);
+
+-- Tinh toan gia tri R,F,M
+
+drop table if exists RFM_rank;
+create temporary table RFM_rank as (
+select
+    *
+    ,ntile(4) over (order by rn_Recency) as R
+    ,ntile(4) over (order by rn_Frequency) as F
+    ,ntile(4) over (order by rn_Monetary) as M
+from RFM_Sc
+group by CustomerID);
+
+select * from RFM_rank
+    group by Monetary
+    order by Monetary desc
+
+-- Mapping các trường hợp lại với nhau
+
+with segmentation as (
+select *, concat(R,F,M) as RFM,
+       case
+           when (R = 1 or R = 2) and (F = 3 or F = 4) and (M = 3 or M = 4) then 'Vip'
+           when (R = 1  or R = 2) and (F = 3 or F = 4) and (M = 1 or M = 2 or M = 3) then 'Loyal'
+           when (R = 3  or R = 4) and (F= 2 or F = 3 or F = 4) and (M = 3 or M = 4) then 'Potential'
+           else 'Casual'
+        end as Segmentation
+from RFM_rank
+group by CustomerID)
+
+select c.CustomerID,c.Recency,c.Frequency,c.Monetary,R,F,M,s.RFM,s.Segmentation from segmentation s
+join RFM_Sc c on s.CustomerID = c.CustomerID
+group by c.CustomerID, c.created_date
+
+-- Star Doanh thu cao, tần suất quay lại nhiều
+-- Cash cow Tần suất quay lại nhiều, doanh thu đều đặn nhưng không nhiều bằng star. Khách hàng thân thiết nhưng chưa chi tiền quá nhiều
+-- Question mark Khách hàng tiềm năng, mới xuất hện gần đay, chi tiêu cũng nhiều. Có th mất bất c lúc nào
+-- Dog khách hàng vãng lai
